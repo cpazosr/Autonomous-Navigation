@@ -20,6 +20,8 @@ This solution focuses efforts on robotics and computer vision with control engin
 
 You can check out a video of the solution here: https://drive.google.com/file/d/1Qn0xJXrjO7snd7zQHDGnzeJXvBT6Cl9z/view?usp=sharing
 
+Solution by @AgusDV111 and me with Manchester Robotics Puzzlebot and tested in Tecnologico de Monterrey campus CEM.
+
 This repository contains all files to run the ROS nodes to run the solution. The next files run each one a ROS node:
 - classify2.py
 - controller.py
