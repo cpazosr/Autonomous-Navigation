@@ -146,10 +146,59 @@ The processing is as follows:
 
 The color publishing only occurs if the light changes, meaning it detects the present light in the traffic light always, but only publishes when that light changes color within the filtered characteristics.
 
-This node challenges are mostly HSV ranges and noise filtering, but once you got those set, it works most effectively.
+This node challenges are mostly HSV ranges and noise filtering, but once you got those set, it works most effectively. You can add a yellow light just by adding another mask with respective HSV range and keep the same blob detector and processing for this new mask.
 
 ## Controller
 
+This is the node that receives all the flags, states and information processed by the previous nodes and take action. The robot moves by publishing into the topic */cmd_vel* via Twist ROS message which specifies linear and angular velocities. Controller logic can be explained as a process of 4 phases:
 
+![imagen](https://user-images.githubusercontent.com/67598380/178187552-300154b7-70da-44c9-a653-c65dd9c35dbf.png)
+> From left to right, execution is sequential
+
+There are a lot of callback functions to receive the subscriptions data which mostly represent states and flags. With all this information, the first 3 stages are for determining and updating the state of the robot, for it to take action in the 4th stage. In order:
+
+- Stage 1: updated the boolean flag *line*, if it's true, the robot has seen several only-one contours continuously, so the state is updated to continue line and naturally not inside an intersection or crossing a crosswalk.
+- Stage 2: when the boolean flag *zebra* is true, it means the robot has seen a crosswalk and is either entering or exiting the intersection. As the robot starts the track following a line and not in an intersection, the flag *in_crosswalk* is False. So if the robot enters a crosswalk, *zebra* flag is True and *in_crosswalk* flag must be updated. If the robot entered the intersection, *in_crosswalk* must be turned to True as it is crossing the intersection, and also while being inside the intersection, the robot keeps the *label* (class) of the sign detected before crossing as we don't want the robot to change the sign instruction midway even if it detects another sign while crossing the intersection. It also has to take the traffic light decision; it is taken when the robot detects the crosswalk. If the light is red, the robot must wait for green light, if not, it can cross (not wait for green light). As the traffic light has no yellow light, if the light changes while crossing the intersection, from green to red, the decision has already been taken so it keeps crossing even while red, because else the robot would have just stopped midway and we don't want that behaviour. So it can seem to happen that the robot ignores red lights, but ideally the traffic light should include yellow light, and the robot is to cross only when green light. Finally, if the robot raises the *zebra* flag and the robot is *in_crosswalk* or crossing the intersection, it means the robot has exited the intersection and should proceed to follow the line, so update that the robot is not anymore *in_crosswalk*, it has no need to wait for green light and light should be kept as green to avoid any red light changes detected while crossing.
+- Stage 3: handling traffic lights. If in the previous stage the robot detected red light, it must wait for green, so if it's waiting, just check if the light has changed to green or it's still on red. Just stop if still on red, or update flag *wait_green* to stop waiting for green as light has now showed green.
+- Stage 4: takes all the flags and states updated above to take movement decision. First, it checks if the robot is crossing the intersection including green light. If True, do not follow line as it must cross the intersection until exiting, but check out if the sign detected indicated cross right or cross straight, so cross the intersection accordingly. If the robot somehow messes the signs up, by having another sign that indicates other thing different from any crossing related action, it must stop as it seemed the safest option rather than crossing blindly. If the robot is not crossing any intersection, it first checks if the STOP sign has been detected and no contours are present, as STOP signs ideally do not appear in the middle of any street but always indicate to stop at maybe an intersection or crosswalk, meaning 0 contours must appear, so if the robot detects the STOP sign, it must stop until the floor has no contours, in the track, this is the case for the end of the track. If not crossing the intersection, and no stop sign, check if the sign detected is *no rules* (the black and white one), which can appear anywhere in the track, ideally not for crossing an intersection. If that sign is detected, it must be following a line, so we just add up to follow it faster (we thought of Germany's no speed limit highways). Finally, if none of the previous state are True, the robot should be continuing following line considering not in an intersection, so not waiting for green, so keep following the line.
+
+The controller node was made of lots of if statements as all this process is within a while loop: while the ROS node is active (no shutdown), so flags and states update each time based on the ROS rate given.
+
+The actions taken in stage 4 are specified as publishing in */cmd_vel* in the x-component of linear velocity for moving forward or backwards, and z-component of angular velocity for changing direction turning on its own axis:
+- STOP: publish 0 in both angular and linear velocities to stop movement.
+- CROSS_STRAIGHT: publish 0 for angular velocity and a maximum velocity for the linear velocity to only move forward at a constant speed.
+- CROSS_RIGHT: ideally moves the robot around a circle based on the relation &omega;=1/R*v. But the robot does not really obey the relation, so we decided fixed values to approximate the turn. To turn left just change angular velocity sign. Important to mention that the flag */line* raised by the line follower node is the key to cross right and proceed to follow the line as the flag will indicate that a constant line has been found once the robot has crossed most of the turn.
+- FOLLOW: line follower action. Takes the centroids coordinates information and computes the difference between x-coordinates. Multiplies that difference by -1 and a proportional gain to align the line and the robot proportionally. Publish that computation to the angular velocity. Publish a maximum velocity to the linear velocity to keep moving forward at constant speed while controlling the turn with the centroids difference. We added an angular velocity saturation for safety matters. Saturation at +0.2 and -0.2 because if the robot turns faster, Jetson Nano shuts down to avoid overcurrent. We also added a consideration for very narrow turns, indicated by the minAreaRect angle, if it's too close to 0 or 90°, the turn is narrow and we reduce linear velocity by half for it to have chance to correct the turn instead of overseeing the line and losing it, but these turns do not make an appearance in this track so it can be commented out.
+
+This is the node that makes the robot move, and this solution just considers a way of updating that movement. Other methods and logic could be applied to make the same movements.
+
+## Performance
+
+We made several tryouts to evaluate performance. We decided to make two versions of the track for this. The first track is just the predefined track showed at the beginning, and the second track is a variation of it with more signals and higher speeds to test the limits of the solution.
+
+With the predefined track, we got these results:
+
+![imagen](https://user-images.githubusercontent.com/67598380/178194986-cc0267d0-995c-4b6a-967f-44159b70a907.png)
+
+These presented a certain consistency, finishing the track successfully 7 out of 11 tries.
+
+The second version of the track was:
+
+![imagen](https://user-images.githubusercontent.com/67598380/178195111-83c46aea-2cf3-4ed7-b210-7f8b3de35d38.png)
+
+And we got these results:
+
+![imagen](https://user-images.githubusercontent.com/67598380/178195138-9daefda8-8ba8-4b68-837f-65cfe12c2b54.png)
+
+Generally speaking, we got good results for the sign detector as failed few times and only for the detection of the black and white sign, sending only 1 noisy image sometimes. The CNN model could be better as it did well in the classification of the used signs, but when used similar signs like the roundabout sign, the predictions were very high (0.90 or above) which should have not happened as that sign is not part of a class and should be considered noise, but this should be addressed again by tradeoffs between sign detection and classification. 
+
+The traffic lights detector showed basically no problems, only be aware about that missing yellow light. The problems came with the line follower node. Line following as an action did not have troubles at all, but the crosswalk and intersection detections did and several times. The main problem is that crosswalk detection, specifically *zebra* flag failed to be raised accordingly. Sometimes it repeated twice while it should have been raised only once, indicating the robot to follow line while crossing the intersection. Or sometimes it was not raised at all again leading to undesired behaviour. The main problem is that track cannot be finished if any intersection crossing is wrong due to detection. So we must take more testing and change intersection detection and behaviour to get better results.
 
 ## Final Comments 
+
+This solution has several videos, presentations and more detailed reports, some in English and most in Spanish. Feel free to contact us if you need more information.
+
+## Acknowledgments
+
+We would like to thank the entire team in @Manchester-Robotics for all their knowledge and guidance through this great period of learning. 
+We also want to thank all our teachers involved in the project, for their time, knowledge and patience. It's been really satisfying and we have learned a lot. 
