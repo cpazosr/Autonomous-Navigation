@@ -100,10 +100,56 @@ The code in *classify2* is the node in charge of classification. It receives the
 
 ## Line Follower and Intersections
 
+This node is in charge of processing everything happening on the floor. It detects the central line to follow but also crosswalks and intersections. It is based on contour detection and count. The processing is as follows:
+1. Crop all but the lowest section. Vertical crop to see only the floor and horizontally to see only the central line and not the other side lines.
+2. Get the centroid of the cropped section. Publish the centroid coordinates.
+3. Grayscale and GaussianBlur.
+4. Binzarization INV to get the black line as white pixels.
+5. Filter by size. Same as sign detection, get closed components with stats and filter by size.
+6. Get contours.
+7. Find the biggest contour detected. This filters out possible noisy contours as the black line must be the biggest central contour.
+8. Get the minAreaRect to have the enclosed minimal area rectangle from the biggest contour which returns the rectangle dimensions, angle and centroid. We publish the centroid and angle.
+9. Check if no contours are detected, and then 3, it means a crosswalk has been detected, so publish a flag.
 
+![imagen](https://user-images.githubusercontent.com/67598380/178182922-802e0363-77a8-4bab-9bc1-5599d38e5d89.png)
+
+![imagen](https://user-images.githubusercontent.com/67598380/178182929-410824f4-6262-43c6-b3c0-c456210a9921.png)
+
+![imagen](https://user-images.githubusercontent.com/67598380/178182934-7c365a42-59b3-459a-8ecb-e09654508923.png)
+
+![imagen](https://user-images.githubusercontent.com/67598380/178182938-0caebcdd-b8d5-4e8f-8001-901e6af85c07.png)
+
+![imagen](https://user-images.githubusercontent.com/67598380/178182952-2cd0c2f7-dee9-424b-9cf3-07ed69aa983c.png)
+
+As it shows in the images, the green centroid is the crop centroid, and the red dot inside the red rectangle is the biggest contour rectangle centroid. All contours are shown in blue. The line follower is simply the difference between x-coordinates of both centroids multiplied by a proportional gain. Meaning that we want to reduce the difference between the line centroid and the crop centroid by adjusting angular speed proportionally to the difference. If the line is too far away, we shall have a more aggressive turn. 
+
+We decided to make other help flags to understand what the robot is looking on the floor. We publish a flag to follow line if the robot detects only one contour several consecutive times. We publish another flag that the robot is looking at no contours if that's the case. And the crosswalk flag that is published every time the robot sees 0 contours and eventually sees 3 or more.
+
+This node is the one that needs more testing and probably other methods for crosswalk detection as it's the one that showed the most failure rate. Another method thought of is creating another node specifically to detect crosswalks and intersection behaviours separated from line following, and maybe a solution is creating a state machine that has the transitions between line following to entering and intersection and the other way exiting the intersection to follow line again, considering crossing the intersection straight or turning left or right. That's for homework.
 
 ## Traffic Lights Detection
 
+This node is a simple one. It's in charge of detecting traffic lights. It's based on HSV ranges and publishes if there is a certain green or red light in sight.
+The processing is as follows:
+1. Camera correction. Same as sign detection.
+2. HSV colorspace and color range filtering. Create one mask for each color.
+3. Erode each mask to reduce noise.
+4. Dilate each mask to keep original light size for filtering.
+5. Blob Detector. Generate blob detector for both masks and use blob properties to filter out possible noise. We used filter by min area, circularity and color being 255 (white pixels as HSV ranges filter to a binary image)
+6. Check if there is a filtered blob in only one of the masks to publish the respective color of the mask.
+
+![imagen](https://user-images.githubusercontent.com/67598380/178185068-df673286-7ff1-4d2b-a45f-bf1e38d1cc31.png)
+
+![imagen](https://user-images.githubusercontent.com/67598380/178185079-84048f2c-41c4-4783-868f-10fefbb2f7e4.png)
+
+![imagen](https://user-images.githubusercontent.com/67598380/178185101-df08c5b7-74b4-4ccf-b4b6-5c73a28c2efa.png)
+
+The color publishing only occurs if the light changes, meaning it detects the present light in the traffic light always, but only publishes when that light changes color within the filtered characteristics.
+
+This node challenges are mostly HSV ranges and noise filtering, but once you got those set, it works most effectively.
+
 ## Controller
+
+
 
 ## Final Comments 
