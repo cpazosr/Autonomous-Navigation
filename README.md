@@ -1,6 +1,8 @@
 # Autonomous-Navigation
 ROS package for Puzzlebot Autonomous Navigation
 
+Authors: cpazosr & AgusDV111
+
 This repository contains the code for the Puzzlebot robot to navigate a track fully autonomous, based on traffic lights and traffic signs along the trajectory. This solution was developed for the Puzzlebot, a great robotic invention provided by @Manchester-Robotics for learning and exploring robotics. The code runs in the NVIDIA Jetson Nano mounted on the robot, specialized hardware enhanced for computer vision, robotics and many other GPU operations.
 
 Learn more about Puzzlebot and Manchester Robotics here: https://www.manchester-robotics.com/
