@@ -100,6 +100,8 @@ To train our model we used around 700 samples per class, each sample being the c
 
 The code in *classify2* is the node in charge of classification. It receives the cropped image from the sign detector, loads the model, processes the incoming image to be the same dimensions, and gets the prediction. It publishes the prediction only if it is above a certain probability (we set it up at 0.80) and if it is not a repeated image, as it keeps on classifying the last image sent by the detector until it sends a new sign. Also be aware that sign detector sends lots of cropped images in a very small time, so the detector is faster than the classifier, so increasing the speed of movement of the robot is a risk of failure for classification, but also that's why the detector only sends one sign at a time, but still detects two or more if they are at sight.
 
+!! Important: we encourage people to use their own CNN as the model has some problems with false positives !!
+
 ## Line Follower and Intersections
 
 This node is in charge of processing everything happening on the floor. It detects the central line to follow but also crosswalks and intersections. It is based on contour detection and count. The processing is as follows:
